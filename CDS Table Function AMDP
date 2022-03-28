@@ -1,0 +1,25 @@
+CLASS zcl_amdp_bp_details DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+   INTERFACES: if_amdp_marker_hdb.
+   CLASS-METHODS: crmd_partner_but000 for table FUNCTION ZCDS_TABLE_FUNCTION.
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+ENDCLASS.
+
+CLASS zcl_amdp_bp_details IMPLEMENTATION.
+ method crmd_partner_but000 by DATABASE FUNCTION FOR HDB LANGUAGE SQLSCRIPT
+  options READ-ONLY
+  using but000.
+   return select sp.client as client,
+                 sp.partner as partnerno,
+                 sp.title as title,
+                 sp.name_first as namefirst,
+                 sp.name1_text as nametext
+            from but000 as sp
+            where sp.client = :p_client;
+ endmethod.
+ENDCLASS.
