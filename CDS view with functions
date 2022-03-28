@@ -1,0 +1,110 @@
+@AbapCatalog.sqlViewName: 'ZCDSFUNC'
+@AbapCatalog.compiler.compareFilter: true
+@AbapCatalog.preserveKey: true
+@EndUserText.label: 'CDS view with functions'
+@VDM.viewType: #BASIC
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+
+define view zdemo_cds_functions // with parameters p_exch : vdm_v_display_currency
+                      //                 p_ebeln : ebeln,
+                      //                 p_bukrs : bukrs
+                     
+as select from ekko as a inner join ekpo as b
+on a.ebeln = b.ebeln
+
+association [1..1] to I_CompanyCode as _company on $projection.bukrs = _company.CompanyCode
+{
+    key a.ebeln,
+    key ebelp,
+    lpad( ebelp,14,'2' ) as ebelp_key,
+   
+    @ObjectModel.foreignKey.association: '_company'
+    a.bukrs,
+       
+    a.aedat as document_date,
+   
+//  **********************************************************
+//      DATE functions
+//  **********************************************************
+    dats_add_days(a.aedat, 10,'INITIAL' ) as date_days,
+    dats_add_months(a.aedat, 1,'INITIAL' ) as date_months,
+   
+    _company.CompanyCodeName,
+   
+//  **********************************************************
+//      STRING functions
+//  **********************************************************    
+    // Frist 10 characters of Company Code name
+    substring( _company.CompanyCodeName, 1,10 ) as short_name,
+   
+    concat(a.ebeln, b.ebelp) as objnr,
+   
+    concat_with_space(a.ebeln, b.ebelp, 1 ) as objnr_with_space,
+    lastchangedatetime,
+   
+    // get year from timestamp field
+    cast( ceil( cast ( a.lastchangedatetime as abap.fltp ) * 0.0000000001 ) - 1 as abap.int2(5) ) as lastchangeyear,
+   
+   'ZDEMO' as literal,                            // literal
+//  **********************************************************
+//      CONDITIONAL expressions
+//  **********************************************************  
+   case a.bsart
+     when 'ZSTO' then 'Stock transfer'
+     when 'ZSER' then 'Service PO'
+     when 'ZSUB' then 'Subcontract'
+     when 'ZRET' then 'Return PO'
+     when 'NB'   then 'Standard PO'
+                 else 'Others'
+   end as document_Type,                          // document type literal using case
+
+//  **********************************************************
+//      ARITHMETIC functions
+//  **********************************************************  
+   @Semantics.currencyCode: true
+   waers as currency,                             // currency
+   
+   @Semantics.amount.currencyCode: 'currency'
+   netwr as net_value,                            // net value
+   @Semantics.amount.currencyCode: 'currency'
+   netpr as net_price,                            // net price
+   @Semantics.unitOfMeasure: true
+   meins as uom,
+   @Semantics.quantity.unitOfMeasure: 'UOM'
+   menge as quantity,
+     
+   @Semantics.amount.currencyCode: 'currency'
+   CEIL( netpr ) as netprice_rounded,             // high value
+   
+   @Semantics.amount.currencyCode: 'currency'
+   FLOOR ( netpr ) as netprice_frounded,          // Low value
+   
+   @Semantics.amount.currencyCode: 'currency'
+   
+   abs(netpr) as netprice_abs,                    // Absolute value
+   
+   @Semantics.amount.currencyCode: 'currency'
+   cast ( netwr as abap.fltp ) * 0.05 as savings, // 5% in savings
+
+//  **********************************************************
+//      CONVERSION functions
+//  **********************************************************  
+   currency_conversion(
+                    amount => netwr,
+                    source_currency => waers,
+                    target_currency => cast( 'USD' as abap.cuky( 5 ) ) ,//:p_exch,
+                    exchange_rate_date => a.aedat,
+                    round => #CDSBOOLEAN.true
+                     ) as net_value_us,
+   
+//   cast( unit_conversion(
+//                    quantity => menge,
+//                    source_unit => meins,
+////                    target_unit => cast( 'G' as abap.unit(3) ) ) as abap.quan( 13, 3 )) as converted_qty,
+                   
+    _company
+   
+}
+//where meins = 'KG'
+//where a.ebeln = $parameters.p_ebeln
+//  and b.bukrs = $parameters.p_bukrs
