@@ -1,0 +1,14 @@
+@AbapCatalog.sqlViewName: 'zcdstfdemo'
+@AbapCatalog.compiler.compareFilter: true
+@AbapCatalog.preserveKey: true
+@AccessControl.authorizationCheck: #CHECK
+@EndUserText.label: 'table function utility'
+define view zcds_table_func_util as select from ZCDS_TABLE_FUNCTION( p_client : $session.client)
+{
+    
+    client,
+    partnerno,
+    title,
+    namefirst,
+    nametext    
+} 
