@@ -1,0 +1,22 @@
+@AbapCatalog.sqlViewName: 'ZCDS_IDA2'
+@AbapCatalog.compiler.compareFilter: true
+@AbapCatalog.preserveKey: true
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'demo ida'
+define view zdemo_cds_ida_2
+    with parameters p_carrid : s_carrid
+as select from sflight as a
+inner join spfli as b on a.carrid = b.carrid
+                    and  a.connid = b.connid
+{
+    a.carrid as flight_id,
+    a.connid as conn_id,
+    a.planetype,
+    a.price,
+    a.currency,
+    b.cityfrom,
+    b.cityto,
+    b.distance,
+    b.distid                 
+}
+where a.carrid = $parameters.p_carrid
