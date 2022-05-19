@@ -1,0 +1,388 @@
+REPORT zdemo_ida_table.
+
+DATA: gv_kunnr TYPE kunnr,
+      gv_erdat TYPE erdat.
+
+CLASS: lcl_handle_action DEFINITION DEFERRED,
+       lcl_cal_fields DEFINITION DEFERRED,
+       lcl_alv_ida DEFINITION DEFERRED.
+
+DATA: go_ida        TYPE REF TO if_salv_gui_table_ida,
+      go_handler    TYPE REF TO lcl_handle_action,
+      go_cal_fields TYPE REF TO lcl_cal_fields,
+      go_alv        TYPE REF TO lcl_alv_ida.
+
+CLASS lcl_alv_ida DEFINITION FINAL.
+  PUBLIC SECTION.
+
+    METHODS:
+      authorization_check,
+      apply_filter,
+      alv_display_settings,
+      list_of_displayed_fields,
+      set_sort_order,
+      display_option,
+      event_handling,
+      double_click,
+      toolbar_button.
+ENDCLASS.
+
+*&---------------------------------------------------------------------*
+*& Event handle Class Definition
+*&---------------------------------------------------------------------*
+CLASS lcl_handle_action DEFINITION.
+  PUBLIC SECTION.
+
+    DATA:
+    go_ida_event TYPE REF TO if_salv_gui_table_ida.
+
+    METHODS:
+      constructor IMPORTING io_ida_event TYPE REF TO if_salv_gui_table_ida,
+      handle_dbclick FOR EVENT double_click OF if_salv_gui_table_display_opt,
+      handle_action FOR EVENT function_selected OF if_salv_gui_toolbar_ida.
+ENDCLASS.
+
+*&---------------------------------------------------------------------*
+*& Calculation Fields Class Definition
+*&---------------------------------------------------------------------*
+CLASS lcl_cal_fields DEFINITION.
+  PUBLIC SECTION.
+
+    INTERFACES if_salv_ida_calc_field_handler.
+
+    METHODS set_field_header_texts
+      IMPORTING io_field_catalog TYPE REF TO if_salv_gui_field_catalog_ida.
+
+*&---------------------------------------------------------------------*
+*& Step#1: Define Structure with custom fields.
+*&       - In our case we have two calculation fields namely TAXAMOUNT and NETAMOUNT
+*&---------------------------------------------------------------------*
+    TYPES:
+      BEGIN OF ty_custom_fields,
+        taxamount  TYPE netwr,
+        net_amount TYPE netwr,
+      END OF ty_custom_fields.
+
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+ENDCLASS.
+*&---------------------------------------------------------------------*
+*& Selection Screen
+*&---------------------------------------------------------------------*
+PARAMETERS: p_vkorg TYPE vkorg MATCHCODE OBJECT z_tvko.
+
+SELECT-OPTIONS: s_erdat FOR gv_erdat,
+                s_kunnr FOR gv_kunnr.
+
+START-OF-SELECTION.
+  CHECK cl_salv_gui_table_ida=>db_capabilities( )->is_table_supported( iv_ddic_table_name = 'VBAK').
+
+  CREATE OBJECT go_alv.
+
+*&-------------------------------Create IDA----------------------------*
+*& Create ALV with integrated data access (IDA)
+*&---------------------------------------------------------------------*
+  go_ida = cl_salv_gui_table_ida=>create( iv_table_name = 'VBAK' ).
+
+  CALL METHOD go_alv->alv_display_settings( ).
+
+  CALL METHOD go_alv->event_handling( ).
+
+  CALL METHOD go_alv->apply_filter( ).
+
+
+*-- Display
+  go_ida->fullscreen( )->display( ).
+
+CLASS lcl_alv_ida IMPLEMENTATION.
+
+  METHOD authorization_check.
+    go_ida->add_authorization_for_object( EXPORTING iv_authorization_object = 'B_PL_VKORG'
+                 it_activities = VALUE if_salv_gui_types_ida=>yt_activities( ( auth_field = 'ACTVT' value = '03' ) )
+                 it_field_mapping = VALUE if_salv_gui_types_ida=>yt_field_mapping( ( auth_field = 'VKORG' view_field = 'VKORG' ) ) ).
+  ENDMETHOD.
+
+
+
+  METHOD apply_filter.
+
+    DATA: lr_vkorg TYPE RANGE OF vkorg.
+
+*-- Set select Options for PARAMETERS fields
+    INSERT VALUE #( sign = 'I'
+                  option = 'EQ'
+                  low = p_vkorg )
+    INTO TABLE lr_vkorg.
+
+*-- Define Selection Screen
+    DATA(lo_sel) = NEW cl_salv_range_tab_collector( ).
+
+    lo_sel->add_ranges_for_name( iv_name = 'VKORG' it_ranges = lr_vkorg[] ).
+    lo_sel->add_ranges_for_name( iv_name = 'ERDAT' it_ranges = s_erdat[] ).
+    lo_sel->add_ranges_for_name( iv_name = 'KUNNR' it_ranges = s_kunnr[] ).
+
+*-- Convert PARAMETERS & SELECT-OPTIONS to Range Table using CL_SALV_RANGE_TAB_COLLECTOR
+    lo_sel->get_collected_ranges( IMPORTING et_named_ranges = DATA(lt_named_ranges) ).
+
+*-- Applying Filter to SALV
+    go_ida->set_select_options( it_ranges = lt_named_ranges ).
+
+  ENDMETHOD.
+
+
+  METHOD alv_display_settings.
+*-- List of fields required to be displayed in ALV Output
+    me->list_of_displayed_fields( ).
+
+*-- Set Sort Order
+    me->set_sort_order( ).
+
+*-- Display Option - Set the reference fields for Currency & Quantity Fields
+    me->display_option( ).
+
+  ENDMETHOD.
+
+
+*&---------------------------Event Handling----------------------------*
+
+*-- Step#1: Define Event Handler Class/Method
+*-- Step#2: Implement Event Handler Class/Method
+*-- Step#3: Enable Double Click for SALV Grid
+*-- Step#4: Set Selection mode for SALV Grid
+*-- Step#5: Set Event Handler Method
+*-- Step#6: Add button to the Toolbar
+*&---------------------------------------------------------------------*
+  METHOD event_handling.
+*-- Set/Handle Double Click
+    me->double_click( ).
+
+*-- Step#6: Add button to the Toolbar - Create own buttons on Toolbar
+    me->toolbar_button( ).
+  ENDMETHOD.
+
+
+  METHOD double_click.
+
+*-- Step#3: Enable Double Click and Set Selection Mode for SALV Grid
+    go_ida->display_options( )->enable_double_click( ).
+
+*-- Step#4: Set Selection mode for SALV Grid
+    go_ida->selection( )->set_selection_mode( EXPORTING iv_mode = 'SINGLE' ).
+
+*-- Step#5: Set Event Handler Method - Instantiate Event Handler Class and Set Handler
+    go_handler = NEW lcl_handle_action( io_ida_event = go_ida ).
+    SET HANDLER go_handler->handle_dbclick FOR go_ida->display_options( ).
+
+  ENDMETHOD.
+
+
+*&--------------------Create own buttons on toolbar--------------------*
+
+*&---------------------------------------------------------------------*
+  METHOD toolbar_button.
+
+*-- Add Button on to the Toolbar
+
+    go_ida->toolbar( )->add_button( EXPORTING iv_fcode = 'DISP'
+                                               iv_text = 'Display' ).
+*-- Set Event Handler Method
+    SET HANDLER go_handler->handle_action FOR go_ida->toolbar( ).
+
+  ENDMETHOD.
+
+
+  METHOD list_of_displayed_fields.
+
+*--  Prepare internal Table with list of fields in Sorting Order
+    DATA(lt_field_names) = VALUE if_salv_gui_types_ida=>yts_field_name(
+                                                        ( CONV string('VKORG') )
+                                                        ( CONV string('ERDAT') )
+                                                        ( CONV string('KUNNR') )
+                                                        ( CONV string('NETWR') )
+                                                        ( CONV string('SPART') )
+                                                        ( CONV string('VBELN') )
+                                                        ( CONV string('VTWEG') )
+                                                        ( CONV string('WAERK') ) ).
+
+*-- Pass list of fields to SALV IDA
+    go_ida->field_catalog( )->set_available_fields(
+                      EXPORTING
+                         its_field_names = lt_field_names ).
+
+  ENDMETHOD.
+
+
+  METHOD set_sort_order.
+
+    DATA lt_aggre TYPE if_salv_gui_types_ida=>yt_aggregation_rule.
+    DATA ls_aggre TYPE if_salv_gui_types_ida=>ys_aggregation_rule.
+
+*-- Prepare table for fields for which Sorting is required
+    DATA: lit_sort_order TYPE if_salv_gui_types_ida=>yt_sort_rule.
+
+    INSERT VALUE #( field_name = 'KUNNR'
+    descending = abap_true
+    is_grouped = abap_true
+    ) INTO TABLE lit_sort_order.
+
+    INSERT VALUE #( field_name = 'WAERK'
+    descending = abap_true
+    is_grouped = abap_true
+    ) INTO TABLE lit_sort_order.
+
+*-- Pass Sort Order to SALV IDA - Set Sort Order
+    go_ida->default_layout( )->set_sort_order( EXPORTING it_sort_order =
+                                                               lit_sort_order ).
+
+
+*-- Aggregation on Net Amount
+    ls_aggre-field_name = 'NETWR'.
+    ls_aggre-function = if_salv_service_types=>cs_function_code-sum.
+    APPEND ls_aggre TO lt_aggre.
+
+    go_ida->standard_functions( )->set_aggregation_active( iv_active = 'X' ).
+    go_ida->default_layout( )->set_aggregations( it_aggregations = lt_aggre ).
+
+
+    go_ida->standard_functions( )->set_export_active( iv_active = 'X' ).
+    go_ida->standard_functions( )->set_print_active( iv_active = 'X' ).
+
+  ENDMETHOD.
+
+  METHOD display_option.
+
+*-- Set Currency ref field
+    go_ida->field_catalog( )->set_currency_reference_field(
+                                    EXPORTING iv_amount_field_name = 'NETWR'
+                                              iv_currency_field_name = 'WAERK' ).
+  ENDMETHOD.
+
+ENDCLASS.
+
+
+
+*&---------------------------------------------------------------------*
+*& Event Handler Class Implementation
+*&---------------------------------------------------------------------*
+
+CLASS lcl_handle_action IMPLEMENTATION.
+
+  METHOD constructor.
+    go_ida_event = go_ida.
+  ENDMETHOD.
+
+
+  METHOD handle_dbclick.
+    DATA: ls_vbak         TYPE vbak,
+          lr_vbeln        TYPE RANGE OF vbeln,
+          lt_named_ranges TYPE if_salv_service_types=>yt_named_ranges.
+
+    IF go_ida IS BOUND.
+      IF go_ida_event->selection( )->is_row_selected( ).
+*-- Get selected row
+        go_ida_event->selection( )->get_selected_row( IMPORTING es_row = ls_vbak ).
+        DATA(lo_ida_item) = cl_salv_gui_table_ida=>create( iv_table_name = 'VBAP' ).
+        IF lo_ida_item IS BOUND.
+
+          INSERT VALUE #( name = 'VBELN'
+          sign = 'I'
+          option = 'EQ'
+          low = ls_vbak-vbeln ) INTO TABLE lt_named_ranges.
+
+          lo_ida_item->set_select_options( it_ranges = lt_named_ranges ).
+          lo_ida_item->fullscreen( )->display( ).
+        ENDIF.
+      ELSE.
+        MESSAGE 'No row selected' TYPE 'I'.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
+
+
+  METHOD handle_action.
+    DATA: ls_vbak         TYPE vbak,
+          lr_vbeln        TYPE RANGE OF vbeln,
+          lt_named_ranges TYPE if_salv_service_types=>yt_named_ranges.
+
+    IF go_ida IS BOUND.
+      IF go_ida->selection( )->is_row_selected( ).
+
+*-- Get selected row
+        go_ida->selection( )->get_selected_row( IMPORTING es_row = ls_vbak ).
+        DATA(lo_ida_item) = cl_salv_gui_table_ida=>create( iv_table_name = 'VBAP').
+        IF lo_ida_item IS BOUND.
+          INSERT VALUE #( name = 'VBELN'
+          sign = 'I'
+          option = 'EQ'
+          low = ls_vbak-vbeln ) INTO TABLE lt_named_ranges.
+          lo_ida_item->set_select_options( it_ranges = lt_named_ranges ).
+          lo_ida_item->fullscreen( )->display( ).
+        ENDIF.
+      ELSE.
+        MESSAGE 'No row selected' TYPE 'I'.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
+
+ENDCLASS.
+
+*&---------------------------------------------------------------------*
+*& Calculation Fields Class Implementation
+*&---------------------------------------------------------------------*
+CLASS lcl_cal_fields IMPLEMENTATION.
+
+*&---------------------------------------------------------------------*
+*& Step#2: Implement method to get calculation field structure
+*&       - Register Structure type to the SALV IDA Grid
+*&---------------------------------------------------------------------*
+  METHOD if_salv_ida_calc_field_handler~get_calc_field_structure.
+    ro_calc_field_structure ?= cl_abap_typedescr=>describe_by_name( 'TY_CUSTOM_FIELDS' ).
+  ENDMETHOD.
+
+
+*&---------------------------------------------------------------------*
+*& Step#3: Implement method to get requested fields
+*&       - What are the database fields needed to calculate the custom calculation fields
+*&---------------------------------------------------------------------*
+  METHOD if_salv_ida_calc_field_handler~get_requested_fields.
+    "Specify Source field for Calculating the Custom Field
+    rts_db_field_name = VALUE #( ( CONV string('NETWR') ) ). "Tax Amount
+    rts_db_field_name = VALUE #( ( CONV string('NETWR') ) )." Net amount
+  ENDMETHOD.
+
+
+*&---------------------------------------------------------------------*
+*& Step#4: Implement method to calculate Line
+*&       - Perform the calculation
+*&---------------------------------------------------------------------*
+  METHOD if_salv_ida_calc_field_handler~calculate_line.
+    " Calculate Values
+    DATA: ls_vbak       TYPE vbak,
+          ls_cal_fields TYPE ty_custom_fields.
+
+    ls_vbak = is_data_base_line.
+    ls_cal_fields-taxamount = ls_vbak-netwr * '0.10'.
+    ls_cal_fields-net_amount = ls_vbak-netwr - ls_cal_fields-taxamount.
+    es_calculated_fields = ls_cal_fields.
+  ENDMETHOD.
+
+
+  METHOD if_salv_ida_calc_field_handler~start_page.
+
+  ENDMETHOD.
+
+
+  METHOD if_salv_ida_calc_field_handler~end_page.
+
+  ENDMETHOD.
+
+  METHOD set_field_header_texts.
+    io_field_catalog->set_field_header_texts( iv_field_name   = 'NETWR'
+                                              iv_header_text  = 'Tax Amt.'
+                                              iv_tooltip_text = 'Amount of Tax' ).
+    io_field_catalog->set_field_header_texts( iv_field_name   = 'NETWR'
+                                              iv_header_text  = 'Net Amt.'
+                                              iv_tooltip_text = 'Amount in Net' ).
+  ENDMETHOD.
+
+ENDCLASS.
