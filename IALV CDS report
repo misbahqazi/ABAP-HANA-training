@@ -1,0 +1,64 @@
+REPORT zdemo_ida_cds.
+
+** Data Declaration
+DATA: go_alv       TYPE REF TO if_salv_gui_table_ida,
+      gv_conid     TYPE sflight-connid,
+      go_cond_fact TYPE REF TO if_salv_ida_condition_factory,
+      go_cond      TYPE REF TO if_salv_ida_condition,
+      gt_r_carrid  TYPE RANGE OF sflight-planetype.
+
+** Selection Screen Design
+SELECTION-SCREEN BEGIN OF BLOCK b1.
+  PARAMETERS: p_plane  TYPE sflight-planetype. "Parameter
+  PARAMETERS: p_carrid TYPE sflight-carrid.    "Parameter
+  SELECT-OPTIONS: so_conid FOR gv_conid.    " Select Options
+SELECTION-SCREEN END OF BLOCK b1.
+
+** Start of Selection.
+START-OF-SELECTION.
+
+  TRY.
+** Create an Object to call the CDS View name
+      go_alv = cl_salv_gui_table_ida=>create_for_cds_view( iv_cds_view_name = 'ZDEMO_CDS_IDA_2' ).
+
+** To Add the input values to the view
+      DATA(go_range) = NEW cl_salv_range_tab_collector( ).
+
+** To get the parameter value, make them as Range table
+      IF p_plane IS NOT INITIAL.
+        gt_r_carrid = VALUE #(
+                             ( sign = 'I' option = 'EQ' low = p_plane ) ).
+
+** Add the parameter to the ranges.
+        go_range->add_ranges_for_name( EXPORTING
+                                       iv_name = 'PLANETYPE'
+                                       it_ranges = gt_r_carrid ).
+      ENDIF.
+** Add the Select Options to the ranges:
+      go_range->add_ranges_for_name( EXPORTING
+                                     iv_name = 'CONN_ID'
+                                     it_ranges = so_conid[] ).
+
+*** set view parameters
+      go_alv->set_view_parameters(
+                   it_parameters = VALUE #( ( name = 'P_CARRID' value = p_carrid ) ) ).
+
+** Collect all the ranges.
+      go_range->get_collected_ranges( IMPORTING
+                                      et_named_ranges = DATA(gt_ranges) ).
+
+** Set the Ranges to IDA ALV
+      go_alv->set_select_options( EXPORTING
+*                                  io_condition = go_cond
+                                  it_ranges = gt_ranges ).
+
+    CATCH cx_root.
+  ENDTRY.
+
+END-OF-SELECTION.
+
+** activate full Screen Mode
+  DATA(go_fullscreen) = go_alv->fullscreen( ).
+
+** Display ALV
+  go_fullscreen->display( ).
