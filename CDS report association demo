@@ -1,0 +1,9 @@
+REPORT zdemo_association.
+
+TABLES mara.
+SELECT a~adoc,a~bloc,
+      SUM( a~aamt ) AS amount
+FROM zdemo_association AS a INTO TABLE @DATA(lt_tab)
+GROUP BY a~adoc,a~bloc ORDER BY a~adoc.
+
+cl_demo_output=>display( lt_tab ).
