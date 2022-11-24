@@ -1,0 +1,25 @@
+@AbapCatalog.sqlViewName: 'ZDEMOASSO'
+@AbapCatalog.compiler.compareFilter: true
+@AbapCatalog.preserveKey: true
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'association demo'
+define view zdemo_association
+as select from zdemoa as a 
+association [1..*] to zdemob as b on a.adoc = b.adoc
+{
+    a.adoc as Adoc,
+    a.aloc as Aloc,
+   
+    b.bdoc as Bdoc,
+    b.bloc as Bloc,
+    
+    @DefaultAggregation: #SUM
+    a.aamt as Aamt,
+    
+    b.curr1,
+    
+    @DefaultAggregation: #SUM
+    @Semantics.amount.currencyCode: 'Curr1'
+    b.bamt1 as Bamt1
+
+}
